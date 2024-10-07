@@ -251,6 +251,9 @@ void synctime()
 {
 	printf("Syncing time\n");
 	configTime(0, 0, ntpServer);
+	setenv("TZ", tzone, 1);
+	tzset();
+	printLocalTime();
 }
 
 void wifi(void *pvParameters)
@@ -268,7 +271,7 @@ void wifi(void *pvParameters)
 	server.begin();
 	int retry = 0;
 	WiFi.begin(globalconf.cssid, globalconf.cpassword);
-	//WiFi.begin("nodwdw", "wqdqwr23er23");
+	// WiFi.begin("nodwdw", "wqdqwr23er23");
 	printf("wifi connect to: %s : %s\n", globalconf.cssid, globalconf.cpassword);
 	Serial.println("Connecting to WiFi..");
 	while (WiFi.status() != WL_CONNECTED)
@@ -296,9 +299,6 @@ void wifi(void *pvParameters)
 		Serial.println(WiFi.localIP());
 		Serial.println(WiFi.dnsIP());
 		synctime();
-		setenv("TZ", tzone, 1);
-		tzset();
-		printLocalTime();
 		ArduinoOTA.begin();
 	}
 
