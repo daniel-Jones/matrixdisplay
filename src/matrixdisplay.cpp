@@ -78,6 +78,7 @@ void saveconfig();
 void printLocalTime();
 void loadconfig();
 void defaultdata();
+void handlecmd();
 
 struct message messages[NUM_MESSAGES] = {0};
 
@@ -104,8 +105,6 @@ void pumpstring()
 	printf("pump: %s\n", pumpmsg);
 	printf("%s\n", body.c_str());
 	pumpDic->jload(body.c_str());
-	printf("value is %s: size is %d\n", pumpDic->search("test1").c_str(), pumpDic->size());
-
 	server.send(200, "text/html", pumpmsg);
 }
 
@@ -256,6 +255,36 @@ void synctime()
 	printLocalTime();
 }
 
+void handlecmd()
+{
+	String body = server.arg("plain");
+	deserializeJson(jsonPumps, body);
+	const char *cmd = NULL;
+	const char *value = NULL;
+	JsonObject obj = jsonPumps.as<JsonObject>();
+	for (JsonPair kv : obj)
+	{
+		cmd = kv.key().c_str();
+		value = kv.value().as<const char *>();
+		printf("%s : %s\n", cmd, value);
+		// cmd handling
+		if (strcmp(cmd, "matrix") == 0)
+		{
+			if (strcmp(value, "off") == 0)
+			{
+				printf("turning matrix off\n");
+				myDisplay.displayShutdown(true);
+			}
+			else if (strcmp(value, "on") == 0)
+			{
+				printf("turning matrix on\n");
+				myDisplay.displayShutdown(false);
+			}
+		}
+	}
+	server.send(200, "application/json", "");
+}
+
 void wifi(void *pvParameters)
 {
 	Serial.println("start wifi");
@@ -267,7 +296,7 @@ void wifi(void *pvParameters)
 	server.on("/config", handleconfigout);
 	server.on("/reset", resetesp32);
 	server.on("/pump", pumpstring);
-
+	server.on("/cmd", handlecmd);
 	server.begin();
 	int retry = 0;
 	WiFi.begin(globalconf.cssid, globalconf.cpassword);
@@ -449,14 +478,12 @@ char msgbuff[MSG_SIZE];
 char rtemp[15] = {0};
 void nextmessage()
 {
-	// printf("nextmessage call");
 	if (globalconf.pos >= NUM_MESSAGES)
 	{
 		globalconf.pos = 0;
 	}
 	if (messages[globalconf.pos].enabled == false)
 	{
-		// printf("skip\n");
 		globalconf.pos++;
 		nextmessage();
 		return;
@@ -557,7 +584,6 @@ void nextmessage()
 	myDisplay.setIntensity(globalconf.brightness);
 	myDisplay.setInvert(messages[globalconf.pos].invert);
 	scrollAlign = PA_CENTER;
-	printf("%s\n", msgbuff);
 	myDisplay.displayText(msgbuff, scrollAlign, messages[globalconf.pos].speed, messages[globalconf.pos].scrollpause * 1000, messages[globalconf.pos].effect1, messages[globalconf.pos].effect2);
 	globalconf.pos++;
 }
