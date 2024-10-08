@@ -73,6 +73,7 @@ struct message
 };
 
 bool wificonnected;
+bool displayon;
 
 void saveconfig();
 void printLocalTime();
@@ -273,12 +274,20 @@ void handlecmd()
 			if (strcmp(value, "off") == 0)
 			{
 				printf("turning matrix off\n");
+				displayon = false;
 				myDisplay.displayShutdown(true);
 			}
 			else if (strcmp(value, "on") == 0)
 			{
 				printf("turning matrix on\n");
+				displayon = true;
 				myDisplay.displayShutdown(false);
+			}
+			else if (strcmp(value, "toggle") == 0)
+			{
+				printf("toggling matrix\n");
+				displayon = !displayon;
+				myDisplay.displayShutdown(!displayon);
 			}
 		}
 	}
@@ -371,6 +380,7 @@ void printLocalTime()
 void setup()
 {
 	wificonnected = false;
+	displayon = true;
 	esp_log_level_set("*", ESP_LOG_VERBOSE);
 	preferences.begin("matrixdisplay", false);
 	globalconf.pos = 0;
@@ -478,6 +488,8 @@ char msgbuff[MSG_SIZE];
 char rtemp[15] = {0};
 void nextmessage()
 {
+	if (!displayon) return;
+
 	if (globalconf.pos >= NUM_MESSAGES)
 	{
 		globalconf.pos = 0;
@@ -602,7 +614,7 @@ void doom()
 
 void loop()
 {
-	if (myDisplay.displayAnimate())
+	if (displayon && myDisplay.displayAnimate())
 	{
 		nextmessage();
 		//  doom();
