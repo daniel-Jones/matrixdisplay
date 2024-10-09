@@ -202,14 +202,12 @@ const char index_html[] PROGMEM = R"rawliteral(
 -->
           </tr>
         </tbody>
-      </table>
-      <iframe name="hidden_iframe" style="display:none;"></iframe>
-      <form action="/reset" method="post" target="hidden_iframe">
-        <button type="submit">Restart Sign</button>
-      </form>
+      </table>     
       <form id="saveform">
         <fieldset>
           <legend>Customisation:</legend>
+          <button type="button" id="toggledisplay" onclick="sendPostRequest('matrix', 'toggle')">Toggle Display</button>&nbsp;
+          <button type="button" id="restart" onclick="sendPostRequest('restart', '')">Restart Sign</button><br>
           Wireless (required for time sync):<br>
           <input type="text" id="cssid" name="cssid" placeholder="ssid"> &nbsp; <input type="password" id="cpassword"
             name="cpassword" placeholder="password">
@@ -418,6 +416,32 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     document.getElementById("datep").valueAsDate = new Date();
 
+
+    function sendPostRequest(key, value) {
+    const data = {
+        [key]: value
+    };
+
+    fetch('/cmd', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Success:', data);
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+    });
+}
 
   </script>
 </body>

@@ -290,6 +290,10 @@ void handlecmd()
 				myDisplay.displayShutdown(!displayon);
 			}
 		}
+		else if (strcmp(cmd, "restart") == 0)
+		{
+			resetesp32();
+		}
 	}
 	server.send(200, "application/json", "");
 }
@@ -600,24 +604,11 @@ void nextmessage()
 	globalconf.pos++;
 }
 
-void doom()
-{
-	myDisplay.displayText("DAYS", PA_CENTER, 40, 2000, PA_SCROLL_DOWN, PA_FADE);
-	while (!myDisplay.displayAnimate())
-	{
-	}
-	myDisplay.displayText("LEFT", PA_CENTER, 40, 2000, PA_OPENING, PA_OPENING);
-	while (!myDisplay.displayAnimate())
-	{
-	}
-}
-
 void loop()
 {
 	if (displayon && myDisplay.displayAnimate())
 	{
 		nextmessage();
-		//  doom();
 		myDisplay.displayReset();
 	}
 }
