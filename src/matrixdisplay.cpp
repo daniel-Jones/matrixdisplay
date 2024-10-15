@@ -24,6 +24,9 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 
+#include <map>
+#include <functional>
+
 const char *ntpServer = "pool.ntp.org";
 const char *tzone = "AEST-10AEDT,M10.1.0,M4.1.0/3";
 
@@ -256,6 +259,24 @@ void synctime()
 	printLocalTime();
 }
 
+std::map<std::string, std::function<void()>> matrixCommands = {
+    {"off", [&]() {
+        printf("turning matrix off\n");
+        displayon = false;
+        myDisplay.displayShutdown(true);
+    }},
+    {"on", [&]() {
+        printf("turning matrix on\n");
+        displayon = true;
+        myDisplay.displayShutdown(false);
+    }},
+    {"toggle", [&]() {
+        printf("toggling matrix\n");
+        displayon = !displayon;
+        myDisplay.displayShutdown(!displayon);
+    }}
+};
+
 void handlecmd()
 {
 	String body = server.arg("plain");
@@ -269,29 +290,12 @@ void handlecmd()
 		value = kv.value().as<const char *>();
 		printf("%s : %s\n", cmd, value);
 		// cmd handling
-		if (strcmp(cmd, "matrix") == 0)
-		{
-			if (strcmp(value, "off") == 0)
-			{
-				printf("turning matrix off\n");
-				displayon = false;
-				myDisplay.displayShutdown(true);
+		if (strcmp(cmd, "matrix") == 0) {
+			auto it = matrixCommands.find(value);
+			if (it != matrixCommands.end()) {
+				it->second();
 			}
-			else if (strcmp(value, "on") == 0)
-			{
-				printf("turning matrix on\n");
-				displayon = true;
-				myDisplay.displayShutdown(false);
-			}
-			else if (strcmp(value, "toggle") == 0)
-			{
-				printf("toggling matrix\n");
-				displayon = !displayon;
-				myDisplay.displayShutdown(!displayon);
-			}
-		}
-		else if (strcmp(cmd, "restart") == 0)
-		{
+		} else if (strcmp(cmd, "restart") == 0) {
 			resetesp32();
 		}
 	}
@@ -471,7 +475,7 @@ void strrev(char *str)
 }
 #endif
 
-char *string_replace(char *source, size_t sourceSize, char *substring, char *with)
+char *string_replace(const char *source, size_t sourceSize, const char *substring, const char *with)
 {
 	char *substring_source = strstr(source, substring);
 	if (substring_source == NULL)
@@ -509,40 +513,28 @@ void nextmessage()
 	strcpy(msgbuff, messages[globalconf.pos].msg);
 	time_t now = time(NULL);
 	struct tm *t = localtime(&now);
-	// replacements
-	if (strstr(msgbuff, "%date%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%d/%m/%y", t);
-		string_replace(msgbuff, strlen(msgbuff), "%date%", rtemp);
-	}
-	if (strstr(msgbuff, "%shortdate%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%d %b", t);
-		string_replace(msgbuff, strlen(msgbuff), "%shortdate%", rtemp);
-	}
-	if (strstr(msgbuff, "%time12%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%I:%M", t);
-		string_replace(msgbuff, strlen(msgbuff), "%time12%", rtemp);
-	}
-	if (strstr(msgbuff, "%time12s%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%I:%M:%S", t);
-		string_replace(msgbuff, strlen(msgbuff), "%time12s%", rtemp);
-	}
-	if (strstr(msgbuff, "%time24%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%R", t);
-		string_replace(msgbuff, strlen(msgbuff), "%time24%", rtemp);
-	}
-	if (strstr(msgbuff, "%time24s%"))
-	{
-		strftime(rtemp, sizeof(rtemp), "%T", t);
-		string_replace(msgbuff, strlen(msgbuff), "%time24s%", rtemp);
-	}
-	if (strstr(msgbuff, "%pump%"))
-	{
-		string_replace(msgbuff, strlen(msgbuff), "%pump%", pumpmsg);
+
+	// Define the replacement patterns and their corresponding format strings
+	const std::pair<const char*, const char*> replacements[] = {
+		{"%date%", "%d/%m/%y"},
+		{"%shortdate%", "%d %b"},
+		{"%time12%", "%I:%M"},
+		{"%time12s%", "%I:%M:%S"},
+		{"%time24%", "%R"},
+		{"%time24s%", "%T"},
+		{"%pump%", pumpmsg}
+	};
+
+	// Iterate over the replacements and perform the string replacements
+	for (const auto& [pattern, format] : replacements) {
+		if (strstr(msgbuff, pattern)) {
+			if (strcmp(pattern, "%pump%") == 0) {
+				string_replace(msgbuff, strlen(msgbuff), pattern, format);
+			} else {
+				strftime(rtemp, sizeof(rtemp), format, t);
+				string_replace(msgbuff, strlen(msgbuff), pattern, rtemp);
+			}
+		}
 	}
 
 	/* replace pump messages */
@@ -568,32 +560,18 @@ void nextmessage()
 	time_t t1 = mktime(&doom);
 
 	double diff = difftime(t1, t0); // Difference in seconds
-	const double secs_per_day = 24.0 * 60 * 60;
-	if (strstr(msgbuff, "%days%"))
-	{
-		itoa((int)ceil(diff / secs_per_day), rtemp, 10);
-		string_replace(msgbuff, strlen(msgbuff), "%days%", rtemp);
+	const char* timeUnits[] = {"%seconds%", "%minutes%", "%hours%", "%days%", "%weeks%"};
+	const double unitDivisors[] = {1, 60, 3600, 86400, 604800};
+	const int numUnits = sizeof(timeUnits) / sizeof(timeUnits[0]);
+
+	for (int i = 0; i < numUnits; i++) {
+		if (strstr(msgbuff, timeUnits[i])) {
+			int value = static_cast<int>(diff / unitDivisors[i]);
+			itoa(value, rtemp, 10);
+			string_replace(msgbuff, strlen(msgbuff), timeUnits[i], rtemp);
+		}
 	}
-	if (strstr(msgbuff, "%weeks%"))
-	{
-		itoa((int)ceil(diff / secs_per_day / 7), rtemp, 10);
-		string_replace(msgbuff, strlen(msgbuff), "%weeks%", rtemp);
-	}
-	if (strstr(msgbuff, "%hours%"))
-	{
-		itoa((int)ceil(floor(diff / 3600)), rtemp, 10);
-		string_replace(msgbuff, strlen(msgbuff), "%hours%", rtemp);
-	}
-	if (strstr(msgbuff, "%minutes%"))
-	{
-		itoa((int)ceil(floor(diff / 60)), rtemp, 10);
-		string_replace(msgbuff, strlen(msgbuff), "%minutes%", rtemp);
-	}
-	if (strstr(msgbuff, "%seconds%"))
-	{
-		itoa((int)ceil(floor(diff)), rtemp, 10);
-		string_replace(msgbuff, strlen(msgbuff), "%seconds%", rtemp);
-	}
+
 #ifdef VERTICAL
 	strrev(msgbuff);
 #endif
