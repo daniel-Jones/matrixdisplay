@@ -218,7 +218,9 @@ const char index_html[] PROGMEM = R"rawliteral(
           <label for="brightness">Brightness:</label>
           <input type="range" min="0" max="15" value="3" class="slider" name="brightness" id="brightness">
           <label for="autoBrightness">Auto Brightness:</label>
-          <input type="checkbox" id="autoBrightness" name="autoBrightness" value="autoBrightness"><br><br>
+          <input type="checkbox" id="autoBrightness" name="autoBrightness" value="autoBrightness">
+          <label for="autoBrightnessThreshold">Maximum (0-512):</label>
+          <input type="number" id="autoBrightnessThreshold" name="autoBrightnessThreshold" min="0" max="512" value="400"><br><br>
           <input class="block" type="submit" value="Save">
           <br>
           <div style="overflow-y: scroll; height:400px;">
@@ -383,6 +385,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
             document.getElementById("brightness").value = data.brightness;
             document.getElementById("autoBrightness").checked = data.autoBrightness;
+            document.getElementById("autoBrightnessThreshold").value = data.autoBrightnessThreshold;
             document.getElementById("cssid").value = data["cssid"];
             document.getElementById("cpassword").value = data["cpassword"];
             document.getElementById("datep").valueAsDate = new Date(data["datep"]);

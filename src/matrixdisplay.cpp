@@ -58,6 +58,7 @@ struct brightness
 {
     unsigned int autoBrightness : 1;
     unsigned int brightness : 4;
+	unsigned int autoBrightnessThreshold : 9; // max 512
     unsigned int RESERVED : 27;
 };
 
@@ -96,6 +97,7 @@ struct message messages[NUM_MESSAGES] = {0};
 MD_Parola myDisplay = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
 #define LIGHT_SENSOR_PIN GPIO_NUM_34
+#define LIGHT_BRIGHTNESS_MAX 400
 
 void handleroot()
 {
@@ -128,11 +130,13 @@ void handlein()
 	deserializeJson(jsonDocument, body);
 	int brightness = jsonDocument["brightness"];
 	bool autoBrightness = jsonDocument["autoBrightness"];
+	int autoBrightnessThreshold = jsonDocument["autoBrightnessThreshold"];
 	String cssid = jsonDocument["cssid"];
 	String cpassword = jsonDocument["cpassword"];
 	String date = jsonDocument["datep"];
 	globalconf.brightness.brightness = brightness;
 	globalconf.brightness.autoBrightness = autoBrightness;
+	globalconf.brightness.autoBrightnessThreshold = autoBrightnessThreshold;
 	strncpy(globalconf.cssid, cssid.c_str(), 256);
 	strncpy(globalconf.cpassword, cpassword.c_str(), 256);
 	strncpy(globalconf.date, date.c_str(), 32);
@@ -208,6 +212,7 @@ void handleconfigout()
 	jsonDocument.clear();
 	jsonDocument["brightness"] = globalconf.brightness.brightness;
 	jsonDocument["autoBrightness"] = globalconf.brightness.autoBrightness;
+	jsonDocument["autoBrightnessThreshold"] = globalconf.brightness.autoBrightnessThreshold;
 	jsonDocument["cssid"] = globalconf.cssid;
 	jsonDocument["cpassword"] = globalconf.cpassword;
 	jsonDocument["datep"] = globalconf.date;
@@ -405,6 +410,7 @@ void setup()
 	preferences.begin("matrixdisplay", false);
 	globalconf.pos = 0;
 	globalconf.brightness.brightness = 7;
+	globalconf.brightness.autoBrightnessThreshold = 400;
 	Serial.begin(115200);
 	// Intialize the object
 	myDisplay.begin();
@@ -457,6 +463,7 @@ void defaultdata()
 	globalconf.pos = 0;
 	globalconf.brightness.brightness = 4;
 	globalconf.brightness.autoBrightness = false;
+	globalconf.brightness.autoBrightnessThreshold = 400;
 	strncpy(globalconf.cssid, "Gensokyo", 256);
 	strncpy(globalconf.cpassword, "passwordhere", 256);
 	strncpy(globalconf.date, "0", 32);
@@ -528,7 +535,20 @@ void nextmessage()
 	strcpy(msgbuff, messages[globalconf.pos].msg);
 	time_t now = time(NULL);
 	struct tm *t = localtime(&now);
-
+	int autoBrightness = 0;
+	int currentBrightness = 0;
+	// do brightness now so it can be used in the replacements
+	if (globalconf.brightness.autoBrightness)
+	{
+		int lightValue = constrain(analogRead(LIGHT_SENSOR_PIN), 0, globalconf.brightness.autoBrightnessThreshold);
+		autoBrightness = map(lightValue, 0, globalconf.brightness.autoBrightnessThreshold, 0, 15);
+		myDisplay.setIntensity(autoBrightness);
+		currentBrightness = autoBrightness;
+	} else
+	{
+		myDisplay.setIntensity(globalconf.brightness.brightness);
+		currentBrightness = globalconf.brightness.brightness;
+	}
 	// Define the replacement patterns and their corresponding format strings
 	const std::pair<const char*, const char*> replacements[] = {
 		{"%date%", "%d/%m/%y"},
@@ -537,7 +557,8 @@ void nextmessage()
 		{"%time12s%", "%I:%M:%S"},
 		{"%time24%", "%R"},
 		{"%time24s%", "%T"},
-		{"%pump%", pumpmsg}
+		{"%pump%", pumpmsg},
+		{"%brightness%", ""},
 	};
 
 	// Iterate over the replacements and perform the string replacements
@@ -545,7 +566,11 @@ void nextmessage()
 		if (strstr(msgbuff, pattern)) {
 			if (strcmp(pattern, "%pump%") == 0) {
 				string_replace(msgbuff, strlen(msgbuff), pattern, format);
-			} else {
+			} else if (strcmp(pattern, "%brightness%") == 0) {
+				snprintf(rtemp, sizeof(rtemp), "%d", currentBrightness);
+				string_replace(msgbuff, strlen(msgbuff), pattern, rtemp);
+			} else
+			{
 				strftime(rtemp, sizeof(rtemp), format, t);
 				string_replace(msgbuff, strlen(msgbuff), pattern, rtemp);
 			}
@@ -590,19 +615,10 @@ void nextmessage()
 #ifdef VERTICAL
 	strrev(msgbuff);
 #endif
-	if (globalconf.brightness.autoBrightness)
-	{
-		int lightValue = analogRead(LIGHT_SENSOR_PIN);
-		int brightness = map(lightValue, 0, 950, 0, 15);  // Map the light value to brightness range (0-15)
-		printf("light value: %d\n", lightValue);
-		printf("Brightness: %d\n", brightness);
-		myDisplay.setIntensity(brightness);
-	} else
-	{
-		myDisplay.setIntensity(globalconf.brightness.brightness);
-	}
+	
 	myDisplay.setInvert(messages[globalconf.pos].invert);
 	scrollAlign = PA_CENTER;
+	printf("displaying: %s\n", msgbuff);
 	myDisplay.displayText(msgbuff, scrollAlign, messages[globalconf.pos].speed, messages[globalconf.pos].scrollpause * 1000, messages[globalconf.pos].effect1, messages[globalconf.pos].effect2);
 	globalconf.pos++;
 }
