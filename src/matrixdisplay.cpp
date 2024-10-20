@@ -58,6 +58,8 @@ struct
 {
 	int pos;
 	int brightness;
+	bool autoBrightness;
+	int autoBrightnessValue;
 	char cssid[256];
 	char cpassword[256];
 	char date[32];
@@ -87,6 +89,8 @@ void handlecmd();
 struct message messages[NUM_MESSAGES] = {0};
 
 MD_Parola myDisplay = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
+
+#define LIGHT_SENSOR_PIN GPIO_NUM_34
 
 void handleroot()
 {
@@ -118,10 +122,12 @@ void handlein()
 	String body = server.arg("plain");
 	deserializeJson(jsonDocument, body);
 	int brightness = jsonDocument["brightness"];
+	bool autoBrightness = jsonDocument["autoBrightness"];
 	String cssid = jsonDocument["cssid"];
 	String cpassword = jsonDocument["cpassword"];
 	String date = jsonDocument["datep"];
 	globalconf.brightness = brightness;
+	globalconf.autoBrightness = autoBrightness;
 	strncpy(globalconf.cssid, cssid.c_str(), 256);
 	strncpy(globalconf.cpassword, cpassword.c_str(), 256);
 	strncpy(globalconf.date, date.c_str(), 32);
@@ -196,6 +202,7 @@ void handleconfigout()
 {
 	jsonDocument.clear();
 	jsonDocument["brightness"] = globalconf.brightness;
+	jsonDocument["autoBrightness"] = globalconf.autoBrightness;
 	jsonDocument["cssid"] = globalconf.cssid;
 	jsonDocument["cpassword"] = globalconf.cpassword;
 	jsonDocument["datep"] = globalconf.date;
@@ -416,6 +423,8 @@ void setup()
 		0);		   /* pin task to core 0 */
 
 	myDisplay.setTextAlignment(PA_LEFT);
+
+	pinMode(LIGHT_SENSOR_PIN, INPUT);
 }
 void saveconfig()
 {
@@ -442,6 +451,7 @@ void defaultdata()
 {
 	globalconf.pos = 0;
 	globalconf.brightness = 4;
+	globalconf.autoBrightness = false;
 	strncpy(globalconf.cssid, "Gensokyo", 256);
 	strncpy(globalconf.cpassword, "passwordhere", 256);
 	strncpy(globalconf.date, "0", 32);
@@ -575,7 +585,17 @@ void nextmessage()
 #ifdef VERTICAL
 	strrev(msgbuff);
 #endif
-	myDisplay.setIntensity(globalconf.brightness);
+	if (globalconf.autoBrightness)
+	{
+		int lightValue = analogRead(LIGHT_SENSOR_PIN);
+		int brightness = map(lightValue, 0, 950, 0, 15);  // Map the light value to brightness range (0-15)
+		printf("light value: %d\n", lightValue);
+		printf("Brightness: %d\n", brightness);
+		myDisplay.setIntensity(brightness);
+	} else
+	{
+		myDisplay.setIntensity(globalconf.brightness);
+	}
 	myDisplay.setInvert(messages[globalconf.pos].invert);
 	scrollAlign = PA_CENTER;
 	myDisplay.displayText(msgbuff, scrollAlign, messages[globalconf.pos].speed, messages[globalconf.pos].scrollpause * 1000, messages[globalconf.pos].effect1, messages[globalconf.pos].effect2);
