@@ -54,12 +54,17 @@ IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 255, 0);
 WebServer server(80);
 
+struct brightness
+{
+    unsigned int autoBrightness : 1;
+    unsigned int brightness : 4;
+    unsigned int RESERVED : 27;
+};
+
 struct
 {
 	int pos;
-	int brightness;
-	bool autoBrightness;
-	int autoBrightnessValue;
+	struct brightness brightness;
 	char cssid[256];
 	char cpassword[256];
 	char date[32];
@@ -126,8 +131,8 @@ void handlein()
 	String cssid = jsonDocument["cssid"];
 	String cpassword = jsonDocument["cpassword"];
 	String date = jsonDocument["datep"];
-	globalconf.brightness = brightness;
-	globalconf.autoBrightness = autoBrightness;
+	globalconf.brightness.brightness = brightness;
+	globalconf.brightness.autoBrightness = autoBrightness;
 	strncpy(globalconf.cssid, cssid.c_str(), 256);
 	strncpy(globalconf.cpassword, cpassword.c_str(), 256);
 	strncpy(globalconf.date, date.c_str(), 32);
@@ -201,8 +206,8 @@ char wifistatus[32] = {0};
 void handleconfigout()
 {
 	jsonDocument.clear();
-	jsonDocument["brightness"] = globalconf.brightness;
-	jsonDocument["autoBrightness"] = globalconf.autoBrightness;
+	jsonDocument["brightness"] = globalconf.brightness.brightness;
+	jsonDocument["autoBrightness"] = globalconf.brightness.autoBrightness;
 	jsonDocument["cssid"] = globalconf.cssid;
 	jsonDocument["cpassword"] = globalconf.cpassword;
 	jsonDocument["datep"] = globalconf.date;
@@ -399,7 +404,7 @@ void setup()
 	esp_log_level_set("*", ESP_LOG_VERBOSE);
 	preferences.begin("matrixdisplay", false);
 	globalconf.pos = 0;
-	globalconf.brightness = 7;
+	globalconf.brightness.brightness = 7;
 	Serial.begin(115200);
 	// Intialize the object
 	myDisplay.begin();
@@ -450,8 +455,8 @@ void loadconfig()
 void defaultdata()
 {
 	globalconf.pos = 0;
-	globalconf.brightness = 4;
-	globalconf.autoBrightness = false;
+	globalconf.brightness.brightness = 4;
+	globalconf.brightness.autoBrightness = false;
 	strncpy(globalconf.cssid, "Gensokyo", 256);
 	strncpy(globalconf.cpassword, "passwordhere", 256);
 	strncpy(globalconf.date, "0", 32);
@@ -585,7 +590,7 @@ void nextmessage()
 #ifdef VERTICAL
 	strrev(msgbuff);
 #endif
-	if (globalconf.autoBrightness)
+	if (globalconf.brightness.autoBrightness)
 	{
 		int lightValue = analogRead(LIGHT_SENSOR_PIN);
 		int brightness = map(lightValue, 0, 950, 0, 15);  // Map the light value to brightness range (0-15)
@@ -594,7 +599,7 @@ void nextmessage()
 		myDisplay.setIntensity(brightness);
 	} else
 	{
-		myDisplay.setIntensity(globalconf.brightness);
+		myDisplay.setIntensity(globalconf.brightness.brightness);
 	}
 	myDisplay.setInvert(messages[globalconf.pos].invert);
 	scrollAlign = PA_CENTER;
